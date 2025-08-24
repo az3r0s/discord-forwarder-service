@@ -37,10 +37,10 @@ class ServiceConfig:
     signals_channel_id: str
     vip_analysis_channel_id: str
     
-    # Telegram (using phone authentication like main bot)
+    # Telegram (using session file for Railway deployment)
     telegram_api_id: str
     telegram_api_hash: str
-    telegram_phone_number: str
+    telegram_session_name: str
     telegram_channel_id: str
     
     # Feature Flags
@@ -56,10 +56,10 @@ class ServiceConfig:
             signals_channel_id=os.getenv('SIGNALS_CHANNEL_ID', ''),
             vip_analysis_channel_id=os.getenv('VIP_ANALYSIS_CHANNEL_ID', ''),
             
-            # Telegram (phone authentication)
+            # Telegram (session file approach)
             telegram_api_id=os.getenv('TELEGRAM_API_ID', ''),
             telegram_api_hash=os.getenv('TELEGRAM_API_HASH', ''),
-            telegram_phone_number=os.getenv('TELEGRAM_PHONE_NUMBER', ''),
+            telegram_session_name=os.getenv('TELEGRAM_SESSION_NAME', 'forwarder_session'),
             telegram_channel_id=os.getenv('TELEGRAM_CHANNEL_ID', ''),
             
             # Feature Flags
@@ -156,9 +156,9 @@ intents = discord.Intents.default()
 intents.message_content = True
 discord_bot = commands.Bot(command_prefix='!forwarder_', intents=intents)
 
-# Telegram client setup (using phone authentication like your main bot)
+# Telegram client setup (using session file for Railway)
 telegram_client = TelegramClient(
-    'forwarder_session',
+    config.telegram_session_name,
     config.telegram_api_id,
     config.telegram_api_hash
 )
@@ -471,10 +471,19 @@ async def start_services():
     """Start both Telegram and Discord services"""
     
     try:
-        # Start Telegram client (using phone number like your main bot)
+        # Start Telegram client (using session file to avoid interactive login)
         logger.info("Starting Telegram client...")
-        await telegram_client.start(phone=config.telegram_phone_number)
-        logger.info("Telegram client connected successfully")
+        
+        # Check if we have a session file or need to authenticate
+        session_file = f"{config.telegram_session_name}.session"
+        
+        if not os.path.exists(session_file):
+            logger.error("No Telegram session file found! Please authenticate first locally.")
+            logger.error("Run the service locally once to create the session file, then upload it to Railway.")
+            raise Exception("Telegram session file not found")
+        
+        await telegram_client.start()
+        logger.info("Telegram client connected successfully using session file")
         
         # Start Discord bot
         logger.info("Starting Discord bot...")
