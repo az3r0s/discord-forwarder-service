@@ -19,14 +19,33 @@ from telethon.tl.types import Channel, User, MessageMediaPhoto, MessageMediaDocu
 
 # Setup session file from environment variable before imports
 def setup_session_file():
-    """Create Telegram session file from base64 environment variable"""
-    session_data_b64 = os.getenv('SESSION_DATA')
-    if not session_data_b64:
-        raise ValueError("SESSION_DATA environment variable not found")
+    """Create Telegram session file from chunked base64 environment variables"""
+    # Try to get chunked session data
+    chunks = []
+    chunk_num = 1
+    
+    while True:
+        chunk_var = f'SESSION_CHUNK_{chunk_num}'
+        chunk_data = os.getenv(chunk_var)
+        if not chunk_data:
+            break
+        chunks.append(chunk_data)
+        chunk_num += 1
+    
+    if not chunks:
+        # Fallback to single SESSION_DATA variable
+        session_data_b64 = os.getenv('SESSION_DATA')
+        if not session_data_b64:
+            raise ValueError("Neither SESSION_CHUNK_* nor SESSION_DATA environment variables found")
+        chunks = [session_data_b64]
     
     try:
+        # Combine all chunks
+        combined_b64 = ''.join(chunks)
+        logging.info(f"Found {len(chunks)} session data chunks, total length: {len(combined_b64)}")
+        
         # Decode the base64 session data
-        session_data = base64.b64decode(session_data_b64)
+        session_data = base64.b64decode(combined_b64)
         
         # Write to session file
         session_file = "forwarder_session.session"
