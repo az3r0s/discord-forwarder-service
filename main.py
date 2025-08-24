@@ -11,10 +11,44 @@ import logging
 import json
 import os
 import re
+import base64
 from typing import Optional, Dict, Any
 from datetime import datetime
 from telethon import TelegramClient, events
 from telethon.tl.types import Channel, User, MessageMediaPhoto, MessageMediaDocument
+
+# Setup session file from environment variable before imports
+def setup_session_file():
+    """Create Telegram session file from base64 environment variable"""
+    session_data_b64 = os.getenv('SESSION_DATA')
+    if not session_data_b64:
+        raise ValueError("SESSION_DATA environment variable not found")
+    
+    try:
+        # Decode the base64 session data
+        session_data = base64.b64decode(session_data_b64)
+        
+        # Write to session file
+        session_file = "forwarder_session.session"
+        with open(session_file, 'wb') as f:
+            f.write(session_data)
+        
+        logging.info(f"Successfully created session file: {session_file}")
+        logging.info(f"Session file size: {len(session_data)} bytes")
+        return True
+        
+    except Exception as e:
+        logging.error(f"Failed to create session file: {e}")
+        return False
+
+# Setup logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
+
+# Create session file at startup
+logger.info("Setting up Telegram session file from environment variable...")
+if not setup_session_file():
+    raise RuntimeError("Failed to setup session file from environment data")
 
 # Import shared utilities (embedded for Railway deployment)
 import sys
