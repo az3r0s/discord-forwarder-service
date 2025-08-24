@@ -44,6 +44,12 @@ def setup_session_file():
         combined_b64 = ''.join(chunks)
         logging.info(f"Found {len(chunks)} session data chunks, total length: {len(combined_b64)}")
         
+        # Add padding if necessary for proper base64 decoding
+        missing_padding = len(combined_b64) % 4
+        if missing_padding:
+            combined_b64 += '=' * (4 - missing_padding)
+            logging.info(f"Added {4 - missing_padding} padding characters to base64 string")
+        
         # Decode the base64 session data
         session_data = base64.b64decode(combined_b64)
         
