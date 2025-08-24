@@ -476,14 +476,24 @@ async def start_services():
         
         # Check if we have a session file or need to authenticate
         session_file = f"{config.telegram_session_name}.session"
+        logger.info(f"Looking for session file: {session_file}")
+        
+        # List all files in current directory for debugging
+        import os
+        current_files = os.listdir('.')
+        logger.info(f"Files in current directory: {current_files}")
         
         if not os.path.exists(session_file):
-            logger.error("No Telegram session file found! Please authenticate first locally.")
-            logger.error("Run the service locally once to create the session file, then upload it to Railway.")
-            raise Exception("Telegram session file not found")
+            logger.error(f"No Telegram session file found at: {session_file}")
+            logger.error("Available files: " + ", ".join([f for f in current_files if f.endswith('.session')]))
+            # Try to continue anyway - Telethon might create a new session
+            logger.info("Attempting to continue without session file...")
+        else:
+            logger.info(f"Found session file: {session_file}")
         
+        # Start with session file if available, otherwise it will prompt (which fails on Railway)
         await telegram_client.start()
-        logger.info("Telegram client connected successfully using session file")
+        logger.info("Telegram client connected successfully")
         
         # Start Discord bot
         logger.info("Starting Discord bot...")
@@ -491,6 +501,8 @@ async def start_services():
         
     except Exception as e:
         logger.error(f"Error starting services: {e}")
+        logger.error(f"Session name config: {config.telegram_session_name}")
+        logger.error(f"Current working directory: {os.getcwd()}")
         raise
 
 async def main():
