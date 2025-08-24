@@ -37,10 +37,10 @@ class ServiceConfig:
     signals_channel_id: str
     vip_analysis_channel_id: str
     
-    # Telegram
+    # Telegram (using phone authentication like main bot)
     telegram_api_id: str
     telegram_api_hash: str
-    telegram_bot_token: str
+    telegram_phone_number: str
     telegram_channel_id: str
     
     # Feature Flags
@@ -56,10 +56,10 @@ class ServiceConfig:
             signals_channel_id=os.getenv('SIGNALS_CHANNEL_ID', ''),
             vip_analysis_channel_id=os.getenv('VIP_ANALYSIS_CHANNEL_ID', ''),
             
-            # Telegram
+            # Telegram (phone authentication)
             telegram_api_id=os.getenv('TELEGRAM_API_ID', ''),
             telegram_api_hash=os.getenv('TELEGRAM_API_HASH', ''),
-            telegram_bot_token=os.getenv('TELEGRAM_BOT_TOKEN', ''),
+            telegram_phone_number=os.getenv('TELEGRAM_PHONE_NUMBER', ''),
             telegram_channel_id=os.getenv('TELEGRAM_CHANNEL_ID', ''),
             
             # Feature Flags
@@ -156,7 +156,7 @@ intents = discord.Intents.default()
 intents.message_content = True
 discord_bot = commands.Bot(command_prefix='!forwarder_', intents=intents)
 
-# Telegram client setup
+# Telegram client setup (using phone authentication like your main bot)
 telegram_client = TelegramClient(
     'forwarder_session',
     config.telegram_api_id,
@@ -471,9 +471,9 @@ async def start_services():
     """Start both Telegram and Discord services"""
     
     try:
-        # Start Telegram client
+        # Start Telegram client (using phone number like your main bot)
         logger.info("Starting Telegram client...")
-        await telegram_client.start(bot_token=config.telegram_bot_token)
+        await telegram_client.start(phone=config.telegram_phone_number)
         logger.info("Telegram client connected successfully")
         
         # Start Discord bot
