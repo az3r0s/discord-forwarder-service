@@ -508,9 +508,27 @@ async def on_ready():
 @telegram_client.on(events.NewMessage)
 async def telegram_message_handler(event):
     """Handle new Telegram messages"""
-    # Only process messages from the configured channel
-    if str(event.chat_id) == str(config.telegram_channel_id):
+    # Log all incoming messages for debugging
+    logger.info(f"📨 Received message from chat_id: {event.chat_id}, configured channel: {config.telegram_channel_id}")
+    
+    # Handle different channel ID formats (Telegram can return different formats)
+    event_chat_id = str(event.chat_id)
+    config_channel_id = str(config.telegram_channel_id)
+    
+    # Try multiple matching strategies
+    is_target_channel = (
+        event_chat_id == config_channel_id or
+        event_chat_id == config_channel_id.lstrip('-') or  # Remove negative sign
+        f"-{event_chat_id}" == config_channel_id or  # Add negative sign
+        f"-100{event_chat_id}" == config_channel_id or  # Supergroup format
+        event_chat_id == config_channel_id.replace('-100', '')  # Remove supergroup prefix
+    )
+    
+    if is_target_channel:
+        logger.info(f"✅ Processing message from target channel")
         await process_telegram_message(event)
+    else:
+        logger.warning(f"⚠️ Ignoring message from unexpected channel {event.chat_id} (expected {config.telegram_channel_id})")
 
 # Health check command
 @discord_bot.command()
