@@ -8,6 +8,12 @@ build/
 develop-eggs/
 dist/
 downloads/
+
+# Sensitive files
+.env
+*.session
+*.session-journal
+railway_env_vars.txt
 eggs/
 .eggs/
 lib/

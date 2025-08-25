@@ -6,9 +6,5 @@
   },
   "start": {
     "command": "python main.py"
-  },
-  "healthcheck": {
-    "path": "/health",
-    "timeout": 30
   }
 }

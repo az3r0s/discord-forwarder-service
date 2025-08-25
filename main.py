@@ -12,6 +12,7 @@ import json
 import os
 import re
 import base64
+import binascii
 from typing import Optional, Dict, Any
 from datetime import datetime
 from telethon import TelegramClient, events
@@ -62,18 +63,43 @@ def setup_session_file():
         logging.info(f"Session file size: {len(session_data)} bytes")
         return True
         
+    except binascii.Error as e:
+        logging.error(f"Base64 decoding failed: {e}")
+        logging.error("This usually means the SESSION_DATA or SESSION_CHUNK_* variables are corrupted")
+        logging.error("Please run fix_session_management.py locally to re-encode the session")
+        return False
     except Exception as e:
         logging.error(f"Failed to create session file: {e}")
+        logging.error(f"Environment variables found: {[k for k in os.environ.keys() if 'SESSION' in k]}")
         return False
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
+# Immediate startup logging
+print("🚀 Discord Forwarder Service starting...")
+logger.info("Discord Forwarder Service starting...")
+
 # Create session file at startup
 logger.info("Setting up Telegram session file from environment variable...")
-if not setup_session_file():
-    raise RuntimeError("Failed to setup session file from environment data")
+session_setup_success = False
+try:
+    session_setup_success = setup_session_file()
+    if session_setup_success:
+        logger.info("✅ Session file setup completed successfully")
+        print("✅ Session file setup completed successfully")
+    else:
+        logger.error("❌ Session file setup failed")
+        print("❌ Session file setup failed")
+except Exception as e:
+    logger.error(f"❌ Session file setup crashed: {e}")
+    print(f"❌ Session file setup crashed: {e}")
+
+if not session_setup_success:
+    logger.error("Cannot continue without session file. Exiting.")
+    print("Cannot continue without session file. Exiting.")
+    exit(1)
 
 # Import shared utilities (embedded for Railway deployment)
 import sys
