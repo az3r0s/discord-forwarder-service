@@ -515,20 +515,26 @@ async def telegram_message_handler(event):
     event_chat_id = str(event.chat_id)
     config_channel_id = str(config.telegram_channel_id)
     
-    # Try multiple matching strategies
+    # Try multiple matching strategies for the CW VIP TRADES channel
     is_target_channel = (
         event_chat_id == config_channel_id or
         event_chat_id == config_channel_id.lstrip('-') or  # Remove negative sign
         f"-{event_chat_id}" == config_channel_id or  # Add negative sign
         f"-100{event_chat_id}" == config_channel_id or  # Supergroup format
-        event_chat_id == config_channel_id.replace('-100', '')  # Remove supergroup prefix
+        event_chat_id == config_channel_id.replace('-100', '') or  # Remove supergroup prefix
+        f"-100{config_channel_id.lstrip('-')}" == event_chat_id  # Add supergroup to config
     )
     
     if is_target_channel:
-        logger.info(f"✅ Processing message from target channel")
+        logger.info(f"✅ Processing message from CW VIP TRADES channel")
         await process_telegram_message(event)
     else:
-        logger.warning(f"⚠️ Ignoring message from unexpected channel {event.chat_id} (expected {config.telegram_channel_id})")
+        # Only log occasionally to avoid spam, but track different channels
+        if event_chat_id not in getattr(telegram_message_handler, '_logged_channels', set()):
+            logger.warning(f"⚠️ Ignoring channel {event.chat_id} (not CW VIP TRADES: {config.telegram_channel_id})")
+            if not hasattr(telegram_message_handler, '_logged_channels'):
+                telegram_message_handler._logged_channels = set()
+            telegram_message_handler._logged_channels.add(event_chat_id)
 
 # Health check command
 @discord_bot.command()
