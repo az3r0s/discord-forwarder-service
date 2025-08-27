@@ -1,1 +1,1 @@
-web: python production_forwarder.py
+web: python main.py
