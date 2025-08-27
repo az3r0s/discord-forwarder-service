@@ -428,15 +428,18 @@ class ProductionForwarder:
             logger.info(f"💾 Persistent storage: {self.tracker.db_path}")
     
     async def initialize_telegram(self):
-        """Initialize Telegram client"""
+        """Initialize Telegram client with session reconstruction from base64 chunks"""
+        # Reconstruct session from Railway environment variables
+        session_data = await self.reconstruct_session_from_env()
+        
         self.telegram_client = TelegramClient(
-            'production_session',
+            session_data,
             self.config.telegram_api_id,
             self.config.telegram_api_hash
         )
         
-        await self.telegram_client.start(phone=self.config.telegram_phone)
-        logger.info("Connected to Telegram")
+        await self.telegram_client.start()
+        logger.info("Connected to Telegram using reconstructed session")
         
         # Setup message handler
         @self.telegram_client.on(events.NewMessage(chats=self.config.telegram_channel_id))
@@ -446,6 +449,37 @@ class ProductionForwarder:
         @self.telegram_client.on(events.MessageEdited(chats=self.config.telegram_channel_id))
         async def handle_telegram_edit(event):
             await self.process_telegram_message(event, is_edit=True)
+
+    async def reconstruct_session_from_env(self):
+        """Reconstruct session data from base64 environment variable chunks"""
+        import base64
+        
+        # Get all session chunks from environment variables
+        session_chunks = []
+        for i in range(1, 11):  # SESSION_CHUNK_1 through SESSION_CHUNK_10
+            chunk_var = f'SESSION_CHUNK_{i}'
+            chunk = os.getenv(chunk_var)
+            if chunk:
+                session_chunks.append(chunk)
+                logger.info(f"Found {chunk_var}")
+            else:
+                logger.warning(f"Missing {chunk_var}")
+        
+        if len(session_chunks) != 10:
+            logger.error(f"Expected 10 session chunks, found {len(session_chunks)}")
+            raise ValueError("Incomplete session data")
+        
+        # Reconstruct the complete base64 string
+        complete_base64 = ''.join(session_chunks)
+        
+        # Decode the session data
+        try:
+            session_data = base64.b64decode(complete_base64)
+            logger.info(f"Successfully reconstructed session data ({len(session_data)} bytes)")
+            return session_data
+        except Exception as e:
+            logger.error(f"Failed to decode session data: {e}")
+            raise
     
     async def process_telegram_message(self, event, is_edit: bool = False):
         """Process incoming Telegram message"""
