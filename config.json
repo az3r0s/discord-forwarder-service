@@ -7,7 +7,7 @@
         "channel_id": -1002796363074
     },
     "discord": {
-        "bot_token": "MTQwMTU5MDQzOTk0OTIzODQyMg.G6nQ7e.28bcR52FhHvUaI5sSGwBODJ4lmit_KSfb9zWmA",
+        "bot_token": "PLACEHOLDER_RAILWAY_USES_DISCORD_TOKEN_ENV_VAR",
         "signals_channel_id": 1401614595117944932,
         "free_signals_channel_id": 1401614591099666544,
         "vip_analysis_channel_id": 1401614596099276871,

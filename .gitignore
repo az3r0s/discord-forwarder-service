@@ -8,12 +8,6 @@ build/
 develop-eggs/
 dist/
 downloads/
-
-# Sensitive files
-.env
-*.session
-*.session-journal
-railway_env_vars.txt
 eggs/
 .eggs/
 lib/
@@ -26,8 +20,26 @@ wheels/
 .installed.cfg
 *.egg
 
-# Environment variables
+# Sensitive files - NEVER COMMIT THESE
 .env
+railway_env_vars.txt
+
+# Telegram session files - keep local only
+*.session
+*.session-journal
+forwarder_session.session
+historical_analyzer.session
+production_session.session
+
+# Database files - will be created fresh on Railway
+*.db
+historical_messages.db
+persistent_message_mapping.db
+
+# Development and analysis files - keep local only
+historical_message_analyzer.py
+
+# Environment variables
 .env.local
 .env.production
 
@@ -44,10 +56,27 @@ logs/
 # Railway
 .railway/
 
-# Telegram session files
-*.session
-*.session-journal
-forwarder_session.session*
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
 
 # Discord bot session files
 *.session
