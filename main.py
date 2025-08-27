@@ -430,10 +430,10 @@ class ProductionForwarder:
     async def initialize_telegram(self):
         """Initialize Telegram client with session reconstruction from base64 chunks"""
         # Reconstruct session from Railway environment variables
-        session_data = await self.reconstruct_session_from_env()
+        session_file_path = await self.reconstruct_session_from_env()
         
         self.telegram_client = TelegramClient(
-            session_data,
+            session_file_path,
             self.config.telegram_api_id,
             self.config.telegram_api_hash
         )
@@ -476,7 +476,15 @@ class ProductionForwarder:
         try:
             session_data = base64.b64decode(complete_base64)
             logger.info(f"Successfully reconstructed session data ({len(session_data)} bytes)")
-            return session_data
+            
+            # Write session data to file
+            session_file_path = "discord_bot_session.session"
+            with open(session_file_path, 'wb') as f:
+                f.write(session_data)
+            
+            logger.info(f"Session file written to {session_file_path}")
+            return session_file_path
+            
         except Exception as e:
             logger.error(f"Failed to decode session data: {e}")
             raise
