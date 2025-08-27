@@ -1,0 +1,20 @@
+{
+    "telegram": {
+        "api_id": 11855685,
+        "api_hash": "cc0d72cd0cdcbbfea6228b078199bea5",
+        "phone_number": "+447393819476",
+        "session_name": "discord_bot_session",
+        "channel_id": -1002796363074
+    },
+    "discord": {
+        "bot_token": "MTQwMTU5MDQzOTk0OTIzODQyMg.G6nQ7e.28bcR52FhHvUaI5sSGwBODJ4lmit_KSfb9zWmA",
+        "signals_channel_id": 1401614595117944932,
+        "free_signals_channel_id": 1401614591099666544,
+        "vip_analysis_channel_id": 1401614596099276871,
+        "chat_channel_id": 1401614597097521192
+    },
+    "signal_routing": {
+        "free_signal_percentage": 10,
+        "enabled": true
+    }
+}
