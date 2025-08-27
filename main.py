@@ -105,6 +105,20 @@ class MessageCategorizer:
             result['confidence'] = 0.9
             return result
         
+        # Check for admin announcements FIRST (before signal updates)
+        admin_patterns = [
+            r'good\s*morning\s*team', r'family\s*emergency', r'step\s*away', 
+            r'won\'t\s*be\s*sending', r'resume\s*as\s*soon', r'understanding\s*and\s*patience',
+            r'!!!\s*important\s*information\s*!!!', r'\bimportant\s*(announcement|notice|information)',
+            r'\bannouncement\b', r'\bnotice\b.*\bmembers?\b', r'\battention\s*(all\s*)?(traders?|members?)',
+            r'\bplease\s*(note|be\s*aware)', r'\bhiccups?\b', r'\btrade\s*calls?\b'
+        ]
+        
+        if any(re.search(pattern, text_lower) for pattern in admin_patterns):
+            result['category'] = 'admin_announcement'
+            result['confidence'] = 0.9
+            return result
+        
         # Check for signal updates
         update_patterns = [
             r'\bupdated?\b', r'\bedit\b', r'\btp\s*\d+\s*(hit|reached)', r'\bsl\s*(hit|triggered)',
@@ -112,8 +126,7 @@ class MessageCategorizer:
             r'\bbreak\s*even', r'\bsl\s*at\s*be', r'\bout\s*at\s*entry', r'\bclosing\s*(at\s*)?entry',
             r'\bclosing\s*this', r'\bsecuring\s*profit', r'\brunner\s*target', r'\bmove\s*sl',
             r'\badjust\s*sl', r'\bsl\s*hit', r'\btp\s*hit', r'\btps?\s*corrected',
-            r'\bsl\s*corrected', r'\brange\s*.*corrected', r'\bprofit\s*shots',
-            r'\bgood\s*morning\s*traders', r'\bdaily\s*briefing', r'\bmarket\s*update', r'🔥'
+            r'\bsl\s*corrected', r'\brange\s*.*corrected', r'\bprofit\s*shots', r'🔥'
         ]
         
         if any(re.search(pattern, text_lower) for pattern in update_patterns):
@@ -135,18 +148,6 @@ class MessageCategorizer:
             result['confidence'] = 0.7
             return result
         
-        # Check for admin announcements
-        admin_patterns = [
-            r'!!!\s*important\s*information\s*!!!', r'\bimportant\s*(announcement|notice|information)',
-            r'\bannouncement\b', r'\bnotice\b.*\bmembers?\b', r'\battention\s*(all\s*)?(traders?|members?)',
-            r'\bplease\s*(note|be\s*aware)', r'\bhiccups?\b', r'\btrade\s*calls?\b'
-        ]
-        
-        if any(re.search(pattern, text_lower) for pattern in admin_patterns):
-            result['category'] = 'admin_announcement'
-            result['confidence'] = 0.8
-            return result
-        
         # Media-based categorization
         if media_type:
             if media_type == 'voice':
@@ -165,11 +166,13 @@ class MessageCategorizer:
                     result['category'] = 'video_content'
                     result['confidence'] = 0.8
             elif media_type == 'image':
-                if any(word in text_lower for word in ['chart', 'analysis', 'setup']):
+                if any(word in text_lower for word in ['chart', 'analysis', 'setup']) or not text.strip():
+                    # Images with chart keywords or empty text are likely charts
                     result['category'] = 'chart_preview'
+                    result['confidence'] = 0.8
                 else:
                     result['category'] = 'image_content'
-                result['confidence'] = 0.8
+                    result['confidence'] = 0.7
         
         return result
 
@@ -371,14 +374,13 @@ class SignalFormatter:
     
     @staticmethod
     def format_vip_signal(text: str, signal_number: int) -> str:
-        """Format signal for VIP channel"""
-        return f"📱 Trading Signal #{signal_number}\n\n{text}"
+        """Format signal for VIP channel - just the raw text"""
+        return text
     
     @staticmethod
     def format_free_signal(text: str, signal_number: int) -> str:
         """Format signal for free channel with footer"""
-        formatted_text = f"📱 Trading Signal\n{text}\n\n🆓 Free Signal Sample"
-        return formatted_text
+        return f"{text}\n\n🆓 Free Signal Sample"
     
     @staticmethod
     def format_weekly_recap_vip(text: str) -> str:
@@ -494,25 +496,41 @@ class ProductionForwarder:
         try:
             message = event.message
             
-            # Check for duplicates
+            # Create unique message identifier
             message_id = f"{message.chat_id}_{message.id}"
-            if message_id in self.processed_messages and not is_edit:
-                return
             
+            # For non-edits, check for duplicates more strictly
             if not is_edit:
+                if message_id in self.processed_messages:
+                    logger.debug(f"Skipping duplicate message: {message_id}")
+                    return
+                
                 self.processed_messages.add(message_id)
                 if len(self.processed_messages) > self.max_tracked_messages:
                     # Remove oldest 1000 messages
-                    for _ in range(1000):
-                        self.processed_messages.pop()
+                    oldest_messages = list(self.processed_messages)[:1000]
+                    for old_msg in oldest_messages:
+                        self.processed_messages.discard(old_msg)
             
             text = message.message or ""
-            if not text.strip():
-                logger.debug("Skipping empty message")
-                return
             
             # Get media info
             media_type, is_voice, is_image = await self.media_handler.get_media_info(message)
+            
+            # IMPORTANT: Handle replies FIRST, regardless of categorization
+            # If this is a reply to a signal, treat it as a signal update
+            if hasattr(message, 'reply_to_msg_id') and message.reply_to_msg_id:
+                logger.info(f"Processing reply to telegram message {message.reply_to_msg_id}")
+                original_signal_mapping = self.tracker.get_message_mapping(message.reply_to_msg_id)
+                if original_signal_mapping:
+                    # This is a reply to a signal, handle as signal update regardless of content
+                    await self.handle_signal_update(message, text, media_type, is_edit)
+                    return
+            
+            # Skip empty messages unless they have media
+            if not text.strip() and not message.media:
+                logger.debug("Skipping empty message with no media")
+                return
             
             # Categorize message
             category_result = self.categorizer.categorize_message(text, media_type)
@@ -534,7 +552,12 @@ class ProductionForwarder:
             elif category == 'admin_announcement':
                 await self.handle_admin_announcement(message, text, media_type, is_edit)
             else:
-                logger.info(f"Skipping {category} message")
+                # FALLBACK: If we have media but no proper category, still forward it
+                if message.media:
+                    logger.info(f"Forwarding uncategorized media message as media content")
+                    await self.handle_media_content(message, text, media_type, 'image_content', is_edit)
+                else:
+                    logger.info(f"Skipping {category} message")
         
         except Exception as e:
             logger.error(f"Error processing message: {e}")
@@ -682,11 +705,93 @@ class ProductionForwarder:
             logger.error(f"Error handling weekly recap: {e}")
     
     async def handle_signal_update(self, message, text: str, media_type: str, is_edit: bool):
-        """Handle signal updates"""
-        # Forward to VIP signals channel only
-        await self.forward_to_single_channel(
-            message, text, media_type, self.config.vip_signals_channel_id, 
-            'signal_update', color=0x3498db)
+        """Handle signal updates as replies to original signals"""
+        try:
+            # Check if this is a reply to a previous signal using Telegram's reply_to_msg_id
+            original_signal_mapping = None
+            if hasattr(message, 'reply_to_msg_id') and message.reply_to_msg_id:
+                original_signal_mapping = self.tracker.get_message_mapping(message.reply_to_msg_id)
+                logger.info(f"Found reply to telegram message {message.reply_to_msg_id}")
+            
+            # Get VIP signals channel
+            vip_channel = self.discord_bot.get_channel(self.config.vip_signals_channel_id)
+            if not vip_channel:
+                logger.error("Could not access VIP signals channel")
+                return
+            
+            # Download media if present
+            discord_file = None
+            if message.media:
+                discord_file = await self.media_handler.download_and_prepare_media(
+                    self.telegram_client, message, media_type)
+            
+            # If we found the original signal, reply to it
+            if original_signal_mapping and original_signal_mapping['discord_vip_msg_id']:
+                try:
+                    original_message = await vip_channel.fetch_message(original_signal_mapping['discord_vip_msg_id'])
+                    
+                    # Create simple embed for the update
+                    embed = discord.Embed(
+                        description=text if text.strip() else "📎 Media Update",
+                        color=0x3498db,
+                        timestamp=datetime.now()
+                    )
+                    
+                    if discord_file and media_type == "image":
+                        embed.set_image(url=f"attachment://{discord_file.filename}")
+                    
+                    files = [discord_file] if discord_file else None
+                    
+                    # Reply to the original signal
+                    update_message = await original_message.reply(embed=embed, files=files)
+                    
+                    # Store mapping for this update
+                    self.tracker.store_message_mapping(
+                        message.id, update_message.id, None,
+                        vip_channel.id, 'signal_update')
+                    
+                    logger.info(f"Posted signal update as reply to original signal")
+                    
+                    # Also update free channel if original was forwarded there
+                    if original_signal_mapping['discord_free_msg_id']:
+                        free_channel = self.discord_bot.get_channel(self.config.free_signals_channel_id)
+                        if free_channel:
+                            try:
+                                original_free_message = await free_channel.fetch_message(original_signal_mapping['discord_free_msg_id'])
+                                
+                                # Prepare new file for free channel
+                                free_files = None
+                                if discord_file:
+                                    free_discord_file = await self.media_handler.download_and_prepare_media(
+                                        self.telegram_client, message, media_type)
+                                    free_files = [free_discord_file] if free_discord_file else None
+                                
+                                free_embed = discord.Embed(
+                                    description=text if text.strip() else "📎 Media Update",
+                                    color=0x3498db,
+                                    timestamp=datetime.now()
+                                )
+                                
+                                if free_files and media_type == "image":
+                                    free_embed.set_image(url=f"attachment://{free_files[0].filename}")
+                                
+                                await original_free_message.reply(embed=free_embed, files=free_files)
+                                logger.info("Posted signal update reply to free channel as well")
+                            except discord.NotFound:
+                                logger.warning("Original free message not found for update reply")
+                    
+                    return
+                    
+                except discord.NotFound:
+                    logger.warning("Original signal message not found for reply")
+            
+            # Fallback: post as standalone message if we can't find original
+            await self.forward_to_single_channel(
+                message, text if text.strip() else "📎 Media Update", media_type, self.config.vip_signals_channel_id, 
+                'signal_update', color=0x3498db)
+            
+        except Exception as e:
+            logger.error(f"Error handling signal update: {e}")
     
     async def handle_analysis_content(self, message, text: str, media_type: str, category: str, is_edit: bool):
         """Handle analysis content"""
